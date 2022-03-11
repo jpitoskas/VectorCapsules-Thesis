@@ -26,6 +26,11 @@ class CapsNet(nn.Module):
         # self.num_primaryCaps = 32 * 6 * 6
         # routing_module = AgreementRouting(self.num_primaryCaps, n_classes, routing_iterations)
         self.routing_module = WeightedAverageRouting()
+
+        self.convCaps = CapsLayer(input_caps=self.num_capsules, input_dim=self.caps_dim, output_caps=16,
+                                    output_dim=16, routing_module=self.routing_module)
+        self.update_output_shape(self.convCaps)
+
         self.digitCaps = CapsLayer(input_caps=self.num_capsules, input_dim=self.caps_dim, output_caps=args.n_classes,
                                    output_dim=16, routing_module=self.routing_module)
         self.update_output_shape(self.digitCaps)
@@ -52,6 +57,7 @@ class CapsNet(nn.Module):
         # print("after 1st conv", x.shape)
         x = self.primaryCaps(x)
         # print("after PrimaryCaps", x.shape)
+        x = self.convCaps(x)
         x = self.digitCaps(x)
         # print(x.shape)
         # exit()

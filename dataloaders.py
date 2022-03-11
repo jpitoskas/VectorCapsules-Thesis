@@ -31,6 +31,7 @@ def load_dataset(args):
 
         dataloaders = smallnorb(args, dataset_paths)
         train_loader = dataloaders['train']
+        valid_loader = dataloaders['valid']
         test_loader = dataloaders['test']
 
 
@@ -57,7 +58,7 @@ def load_dataset(args):
             batch_size=args.batch_size, shuffle=False, **kwargs)
 
 
-    return train_loader, test_loader
+    return train_loader, valid_loader, test_loader
 
 
 

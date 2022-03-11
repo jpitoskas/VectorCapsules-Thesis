@@ -19,6 +19,7 @@ import torch.optim as optim
 from torch.optim import lr_scheduler
 # from torchvision import datasets, transforms
 from torch.autograd import Variable
+import logging
 #
 # import logging
 
@@ -32,6 +33,8 @@ if __name__ == '__main__':
     # import torch.optim as optim
     # from torchvision import datasets, transforms
     # from torch.autograd import Variable
+
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
 
     # Training settings
     parser = argparse.ArgumentParser(description='CapsNet with MNIST')
@@ -74,7 +77,12 @@ if __name__ == '__main__':
         torch.cuda.manual_seed(args.seed)
 
 
-    train_loader, test_loader = load_dataset(args)
+    train_loader, valid_loader, test_loader = load_dataset(args)
+
+
+
+
+
 
 
     model = CapsNet(args)
@@ -130,12 +138,17 @@ if __name__ == '__main__':
         #     epoch, batch_idx * len(data), len(train_loader.dataset),
         #            100. * batch_idx / len(train_loader), loss.item()))
 
-    def test():
+    def test(split="Validation"):
+        # split = "Validation" or "Test"
+
         model.eval()
         test_loss = 0
         correct = 0
+
+        loader = valid_loader if split=="Validation" else test_loader
+
         with torch.no_grad():
-            for data, target in test_loader:
+            for data, target in loader:
                 if args.cuda:
                     data, target = data.cuda(), target.cuda()
 
@@ -151,16 +164,22 @@ if __name__ == '__main__':
                 pred = probs.data.max(1, keepdim=True)[1]  # get the index of the max probability
                 correct += pred.eq(target.data.view_as(pred)).cpu().sum()
 
-        test_loss /= len(test_loader.dataset)
-        print('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)\n'.format(
-            test_loss, correct, len(test_loader.dataset),
-            100. * correct / len(test_loader.dataset)))
+        test_loss /= len(loader.dataset)
+        print('{} set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)\n'.format(
+            split, test_loss, correct, len(loader.dataset),
+            100. * correct / len(loader.dataset)))
         return test_loss
+
+
+    logging.info('\nTrain: {} - Validation: {} - Test: {}'.format(
+        len(train_loader.dataset), len(valid_loader.dataset),
+        len(test_loader.dataset)))
 
     for epoch in range(1, args.epochs + 1):
         train(epoch)
-        test_loss = test()
-        scheduler.step(test_loss)
+        valid_loss = test("Validation")
+        scheduler.step(valid_loss)
+        test_loss = test("Test")
         # torch.save(model.state_dict(),
         #            '{:03d}_model_dict_{}routing_reconstruction{}.pth'.format(epoch, args.routing_iterations,
         #                                                                          args.with_reconstruction))
