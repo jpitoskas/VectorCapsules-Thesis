@@ -59,7 +59,7 @@ if __name__ == '__main__':
     # parser.add_argument('--n_epochs', type=int, default=300)
     # parser.add_argument('--weight_decay', type=float, default=1e-6)
     # parser.add_argument('--routing_iter', type=int, default=3)
-    # parser.add_argument('--padding', type=int, default=4)
+    parser.add_argument('--padding', type=int, default=4)
     parser.add_argument('--brightness', type=float, default=0)
     parser.add_argument('--contrast', type=float, default=0)
     # parser.add_argument('--patience', default=1e+4)
@@ -67,7 +67,7 @@ if __name__ == '__main__':
     # parser.add_argument('--arch', nargs='+', type=int, default=[64,16,16,16,5]) # architecture n caps
     parser.add_argument('--num_workers', type=int, default=1)
     # parser.add_argument('--load_checkpoint_dir', default='../experiments')
-    # parser.add_argument('--test_affnist', dest='test_affNIST', action='store_true')
+    parser.add_argument('--test_affnist', dest='test_affNIST', action='store_true')
     # parser.add_argument('--routing', default='vb', help='routing algorithm (vb, naive)')
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()

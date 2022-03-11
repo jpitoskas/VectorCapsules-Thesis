@@ -57,7 +57,10 @@ class CapsNet(nn.Module):
         # print("after 1st conv", x.shape)
         x = self.primaryCaps(x)
         # print("after PrimaryCaps", x.shape)
+        # exit()
+
         x = self.convCaps(x)
+        
         x = self.digitCaps(x)
         # print(x.shape)
         # exit()
