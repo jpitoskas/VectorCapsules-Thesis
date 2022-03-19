@@ -40,7 +40,7 @@ def load_dataset(args):
         args.channels = 1
         args.n_classes = 10
         args.Hin = args.crop_dim
-        args.Win =args.crop_dim
+        args.Win = args.crop_dim
         dataset = "MNIST"
 
         working_dir = os.path.join(os.getcwd(), 'data', dataset)
@@ -73,6 +73,31 @@ def load_dataset(args):
                         'test':  os.path.join(working_dir,'test')}
         dataloaders = svhn(args, dataset_paths)
 
+
+
+    elif args.dataset == 'fashionmnist':
+        args.channels = 1
+        args.n_classes = 10
+        dataset = 'FashionMNIST'
+        args.padding = 4
+        args.Hin = args.crop_dim
+        args.Win = args.crop_dim
+        working_dir = os.path.join(os.getcwd(), 'data', dataset)
+        dataset_paths = {'train': os.path.join(working_dir,'train'),
+                        'test':  os.path.join(working_dir,'test')}
+        dataloaders = fashionmnist(args, dataset_paths)
+
+    elif args.dataset == 'cifar10':
+        args.channels = 3
+        args.n_classes = 10
+        dataset = 'CIFAR10'
+        args.padding = 4
+        args.Hin = args.crop_dim
+        args.Win = args.crop_dim
+        working_dir = os.path.join(os.getcwd(), 'data', dataset)
+        dataset_paths = {'train': os.path.join(working_dir,'train'),
+                        'test':  os.path.join(working_dir,'test')}
+        dataloaders = cifar10(args, dataset_paths)
 
 
 
@@ -364,5 +389,174 @@ def svhn(args, dataset_paths):
 
     dataloaders = {i: DataLoader(datasets[i], num_workers=args.num_workers, pin_memory=True,
         batch_size=args.batch_size, shuffle=config[i]) for i in config.keys()}
+
+    return dataloaders
+
+def fashionmnist(args, dataset_paths):
+    ''' Loads the Fashion-MNIST dataset.
+        Returns: train/valid/test set split dataloaders.
+    '''
+    transf = {
+        'train': transforms.Compose([
+            transforms.RandomCrop((args.crop_dim, args.crop_dim), padding=args.padding),
+            # transforms.ColorJitter(brightness=args.brightness, contrast=args.contrast),
+            transforms.ToTensor(),
+            # Standardize()]),
+            transforms.Normalize((0.2860406,), (0.3530242,))
+            ]),
+
+        'test': transforms.Compose([
+            transforms.Pad(padding=(args.crop_dim - 28) // 2),
+            transforms.ToTensor(),
+            # Standardize()])}
+            transforms.Normalize((0.2860406,), (0.3530242,))
+            ])
+    }
+
+    # config = {'train': True, 'extra': True, 'test': False}
+    config = {'train': True, 'test': False}
+    datasets = {i: torchvision.datasets.FashionMNIST(root=dataset_paths[i], transform=transf[i],
+                        train=config[i], download=True) for i in config.keys()}
+
+    # split train into train and class-balanced valid set
+    data, labels = random_split(data=datasets['train'].data,
+        labels=datasets['train'].targets,
+        n_classes=10,
+        n_samples_per_class=np.repeat(500, 10)) # 500 per class
+
+    # define transforms for train set (without valid data)
+    transf['train_'] = transforms.Compose([
+                transforms.ToPILImage(),
+                transforms.RandomCrop((args.crop_dim, args.crop_dim), padding=args.padding),
+                transforms.ToTensor(),
+                transforms.Normalize((0.2860406,), (0.3530242,))
+                ])
+
+
+    # define transforms for class-balanced valid set
+    transf['valid'] = transforms.Compose([
+                transforms.ToPILImage(),
+                transforms.RandomCrop((args.crop_dim, args.crop_dim), padding=args.padding),
+                transforms.ToTensor(),
+                transforms.Normalize((0.2860406,), (0.3530242,))
+                ])
+
+    # transf['train_'] = transf['train']
+    # transf['valid'] = transf['train']
+
+
+
+    # save original full training set
+    datasets['train_valid'] = datasets['train']
+
+    # make new training set without validation samples
+    datasets['train'] = CustomDataset(data=data['train'],
+        labels=labels['train'], transform=transf['train_'])
+
+    # make class balanced validation set
+    datasets['valid'] = CustomDataset(data=data['valid'],
+        labels=labels['valid'], transform=transf['valid'])
+
+    config = {'train': True, 'train_valid': True,
+        'valid': False, 'test': False}
+
+
+    dataloaders = {i: DataLoader(datasets[i], num_workers=args.num_workers, pin_memory=True,
+        batch_size=args.batch_size, shuffle=config[i]) for i in config.keys()}
+
+
+    return dataloaders
+
+
+def cifar10(args, dataset_paths):
+    ''' Loads the CIFAR-10 dataset.
+        Returns: train/valid/test set split dataloaders.
+    '''
+    transf = {
+        'train': transforms.Compose([
+            transforms.RandomCrop((args.crop_dim, args.crop_dim), padding=args.padding),
+            # transforms.ColorJitter(brightness=args.brightness, contrast=args.contrast),
+            transforms.ToTensor(),
+            # Standardize()]),
+            transforms.Normalize((0.4913997, 0.4821584, 0.4465309),
+                                 (0.2470322, 0.2434851, 0.2615878)),
+            transforms.RandomHorizontalFlip(p=0.5)
+            ]),
+
+        'test': transforms.Compose([
+            transforms.ToTensor(),
+            # Standardize()])}
+            transforms.Normalize((0.4913997, 0.4821584, 0.4465309),
+                                 (0.2470322, 0.2434851, 0.2615878))
+            ])
+    }
+
+    # config = {'train': True, 'extra': True, 'test': False}
+    config = {'train': True, 'test': False}
+    datasets = {i: torchvision.datasets.CIFAR10(root=dataset_paths[i], transform=transf[i],
+                        train=config[i], download=True) for i in config.keys()}
+
+    # print(datasets['train'][0])
+    # exit()
+
+
+
+    datasets['train'].targets = torch.LongTensor(datasets['train'].targets)
+    datasets['test'].targets = torch.LongTensor(datasets['test'].targets)
+
+
+
+
+    # split train into train and class-balanced valid set
+    data, labels = random_split(data=datasets['train'].data,
+        labels=datasets['train'].targets,
+        n_classes=10,
+        n_samples_per_class=np.repeat(500, 10)) # 500 per class
+
+
+    # define transforms for train set (without valid data)
+    transf['train_'] = transforms.Compose([
+                transforms.ToPILImage(),
+                transforms.RandomCrop((args.crop_dim, args.crop_dim), padding=args.padding),
+                transforms.ToTensor(),
+                transforms.Normalize((0.4913997, 0.4821584, 0.4465309),
+                                     (0.2470322, 0.2434851, 0.2615878)),
+                transforms.RandomHorizontalFlip(p=0.5)
+                ])
+
+
+    # define transforms for class-balanced valid set
+    transf['valid'] = transforms.Compose([
+                transforms.ToPILImage(),
+                transforms.RandomCrop((args.crop_dim, args.crop_dim), padding=args.padding),
+                transforms.ToTensor(),
+                transforms.Normalize((0.4913997, 0.4821584, 0.4465309),
+                                     (0.2470322, 0.2434851, 0.2615878)),
+                transforms.RandomHorizontalFlip(p=0.5)
+                ])
+
+    # transf['train_'] = transf['train']
+    # transf['valid'] = transf['train']
+
+
+
+    # save original full training set
+    datasets['train_valid'] = datasets['train']
+
+    # make new training set without validation samples
+    datasets['train'] = CustomDataset(data=data['train'],
+        labels=labels['train'], transform=transf['train_'])
+
+    # make class balanced validation set
+    datasets['valid'] = CustomDataset(data=data['valid'],
+        labels=labels['valid'], transform=transf['valid'])
+
+    config = {'train': True, 'train_valid': True,
+        'valid': False, 'test': False}
+
+
+    dataloaders = {i: DataLoader(datasets[i], num_workers=args.num_workers, pin_memory=True,
+        batch_size=args.batch_size, shuffle=config[i]) for i in config.keys()}
+
 
     return dataloaders

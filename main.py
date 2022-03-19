@@ -115,14 +115,21 @@ if __name__ == '__main__':
             optimizer.zero_grad()
             if args.with_reconstruction:
                 output, probs = model(data, target)
-                reconstruction_loss = F.mse_loss(output, data.view(-1, output.size(1)))
+                reconstruction_loss = F.mse_loss(output, data.view(-1, output.size(1))).item()
+                # print(output.shape, data.view(-1, output.size(1)).shape)
+                # dif = output - data.view(-1, output.size(1))
+                # dif = torch.square(dif)
+                # print(torch.mean(dif, dim=1).mean())
+                # print(reconstruction_loss)
+                # exit()
                 margin_loss = loss_fn(probs, target)
                 loss = reconstruction_alpha * reconstruction_loss + margin_loss
-                train_loss += loss
+                train_loss += loss * data.size(0)
+                # print(loss)
             else:
                 output, probs = model(data)
                 loss = loss_fn(probs, target)
-                train_loss += loss
+                train_loss += loss * data.size(0)
             pred = probs.data.max(1, keepdim=True)[1]  # get the index of the max probability
             correct += pred.eq(target.data.view_as(pred)).cpu().sum()
 
@@ -154,12 +161,27 @@ if __name__ == '__main__':
 
                 if args.with_reconstruction:
                     output, probs = model(data, target)
-                    reconstruction_loss = F.mse_loss(output, data.view(-1, output.size(1)), size_average=False).item()
-                    test_loss += loss_fn(probs, target, size_average=False).item()
-                    test_loss += reconstruction_alpha * reconstruction_loss
+                    reconstruction_loss = F.mse_loss(output, data.view(-1, output.size(1)), size_average=True).item()
+                    margin_loss = loss_fn(probs, target, size_average=True).item()
+                    loss = reconstruction_alpha * reconstruction_loss + margin_loss
+                    test_loss += loss * data.size(0)
+                    # print(loss)
+                    # print(len(loader))
+                    # print(data.shape)
+                    # print(output.shape, data.view(-1, output.size(1)).shape)
+                    # dif = output - data.view(-1, output.size(1))
+                    # dif = torch.square(dif)
+                    # print('\n', torch.mean(dif, dim=1).mean())
+                    # print('\n', reconstruction_loss)
+                    # print('\n', margin_loss)
+                    # print()
+                    # exit()
+
                 else:
                     output, probs = model(data)
-                    test_loss += loss_fn(probs, target, size_average=False).item()
+                    margin_loss += loss_fn(probs, target, size_average=False).item()
+                    loss = margin_loss
+                    test_loss += loss * data.size(0)
 
                 pred = probs.data.max(1, keepdim=True)[1]  # get the index of the max probability
                 correct += pred.eq(target.data.view_as(pred)).cpu().sum()

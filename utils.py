@@ -51,6 +51,10 @@ def random_split(data, labels, n_classes, n_samples_per_class):
     """ Creates a class-balanced validation set from a training set. """
     train_X, train_Y, valid_X, valid_Y = [],[],[],[]
 
+    # if isinstance(labels, list):
+    #     print("peos")
+    #     labels = torch.Tensor(labels)
+
     for c in range(n_classes):
         # get indices of all class 'c' samples
         c_idx = (np.array(labels) == c).nonzero()[0]
@@ -60,6 +64,10 @@ def random_split(data, labels, n_classes, n_samples_per_class):
         train_samples = np.setdiff1d(c_idx, valid_samples)
         # assign class c samples to validation, and remaining to training
         train_X.extend(data[train_samples])
+        # print(train_Y)
+        # print(train_samples)
+        # print(type(labels))
+        # exit()
         train_Y.extend(labels[train_samples])
         valid_X.extend(data[valid_samples])
         valid_Y.extend(labels[valid_samples])
