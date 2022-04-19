@@ -16,6 +16,7 @@ class CapsLayer(nn.Module):
         self.routing_module = routing_module
         self.reset_parameters()
 
+
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.input_caps)
         self.weights.data.uniform_(-stdv, stdv)
@@ -30,7 +31,10 @@ class CapsLayer(nn.Module):
         u_predict = u_predict.view(u_predict.size(0), self.input_caps, self.output_caps, self.output_dim)
         # print("reshape before routing", u_predict.shape)
         # exit()
+        # print("Before Routing", u_predict.shape)
         v = self.routing_module(u_predict)
+        # print("After Routing", v.shape)
+        # exit()
         return v
 
 

@@ -330,6 +330,10 @@ def svhn(args, dataset_paths):
     # weighted sampler weights for full(f) training set
     f_s_weights = sample_weights(datasets['train'].labels)
 
+
+    # print(np.repeat(1000, 10).reshape(-1))
+    #
+    # exit()
     # return data, labels dicts for new train set and class-balanced valid set
     data, labels = random_split(data=datasets['train'].data,
                                 labels=datasets['train'].labels,

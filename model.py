@@ -6,7 +6,7 @@ from torch.autograd import Variable
 
 
 from capslayers import PrimaryCapsLayer, CapsLayer
-from routing import WeightedAverageRouting
+from routing import WeightedAverageRouting, RansacRouting, DropoutWeightedAverageRouting, AgreementRouting
 
 
 class CapsNet(nn.Module):
@@ -17,19 +17,42 @@ class CapsNet(nn.Module):
         self.channels = args.channels
         self.H = args.Hin
         self.W = args.Win
+        self.extra_conv = args.extra_conv
 
+        # self.conv1 = nn.Conv2d(in_channels=args.channels, out_channels=256, kernel_size=9, stride=1)
         self.conv1 = nn.Conv2d(in_channels=args.channels, out_channels=256, kernel_size=9, stride=1)
         self.update_output_shape(self.conv1)
+
+        if args.extra_conv:
+            self.conv2 = nn.Conv2d(in_channels=256, out_channels=128, kernel_size=5, stride=1)
+            self.update_output_shape(self.conv2)
+
+
         # exit()
         self.primaryCaps = PrimaryCapsLayer(input_channels=self.channels, output_caps=32, output_dim=8, kernel_size=9, stride=2)  # outputs 6*6
         self.update_output_shape(self.primaryCaps)
         # self.num_primaryCaps = 32 * 6 * 6
         # routing_module = AgreementRouting(self.num_primaryCaps, n_classes, routing_iterations)
-        self.routing_module = WeightedAverageRouting()
+        # self.routing_module = WeightedAverageRouting()
+        if args.routing_module == "AgreementRouting":
+            self.routing_module = AgreementRouting(self.num_primaryCaps, args.n_classes, args.routing_iterations)
+        elif args.routing_module == "WeightedAverageRouting":
+            self.routing_module = WeightedAverageRouting()
+        elif args.routing_module == "DropoutWeightedAverageRouting":
+            self.routing_module = DropoutWeightedAverageRouting(p=args.dropout_probability)
+
+        # self.routing_module = RansacRouting()
 
         # self.convCaps = CapsLayer(input_caps=self.num_capsules, input_dim=self.caps_dim, output_caps=16,
         #                             output_dim=16, routing_module=self.routing_module)
         # self.update_output_shape(self.convCaps)
+        print("input caps", self.num_capsules)
+        print("input dim", self.caps_dim)
+        print("output caps", args.n_classes)
+        print("output dim", 16)
+
+        print(self.num_capsules, self.H)
+        # exit()
 
         self.digitCaps = CapsLayer(input_caps=self.num_capsules, input_dim=self.caps_dim, output_caps=args.n_classes,
                                    output_dim=16, routing_module=self.routing_module)
@@ -50,10 +73,13 @@ class CapsNet(nn.Module):
             self.num_capsules = layer.output_caps
             self.caps_dim = layer.output_dim
 
-    def forward(self, input):
+    def forward(self, x):
         # print("\nInput:", input.shape)
-        x = self.conv1(input)
+        x = self.conv1(x)
         x = F.relu(x)
+        if self.extra_conv:
+            x = self.conv2(x)
+            x = F.relu(x)
         # print("after 1st conv", x.shape)
         x = self.primaryCaps(x)
         # print("after PrimaryCaps", x.shape)
