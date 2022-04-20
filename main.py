@@ -138,7 +138,7 @@ if __name__ == '__main__':
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True, patience=15, min_lr=1e-6)
-    
+
 
     loss_fn = MarginLoss(0.9, 0.1, 0.5)
 
