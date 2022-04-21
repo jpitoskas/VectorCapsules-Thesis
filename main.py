@@ -55,7 +55,6 @@ if __name__ == '__main__':
     os.mkdir(new_model_dir)
 
 
-    exit()
     # reset root logger
     [logging.root.removeHandler(handler) for handler in logging.root.handlers[:]]
     # info logger for saving command line outputs during training
