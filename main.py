@@ -23,11 +23,12 @@ import logging
 import os
 
 import matplotlib.pyplot as plt
-#
-# import logging
 
 from dataloaders import load_dataset
 from model import CapsNet, ReconstructionNet, CapsNetWithReconstruction, MarginLoss
+
+
+warnings.filterwarnings("ignore")
 
 
 if __name__ == '__main__':
