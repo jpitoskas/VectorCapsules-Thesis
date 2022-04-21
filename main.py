@@ -40,15 +40,22 @@ if __name__ == '__main__':
 
     experiments_dir = os.path.join(os.getcwd(),'experiments')
     model_dir_prefix = "Model_"
-    model_dirs = [model_dir if os.path.isdir(os.path.join(experiments_dir, model_dir)) else None for model_dir in os.listdir(experiments_dir)]
-    model_dirs = list(filter(None, model_dirs))
-    ids = [int(dd.replace(model_dir_prefix,"")) if (model_dir_prefix) in dd and dd.replace(model_dir_prefix,"").isnumeric() else None for dd in model_dirs]
-    ids = list(filter(None, ids))
-    new_id = str(max(ids) + 1)
+
+    if os.path.exists(experiments_dir):
+        model_dirs = [model_dir if os.path.isdir(os.path.join(experiments_dir, model_dir)) else None for model_dir in os.listdir(experiments_dir)]
+        model_dirs = list(filter(None, model_dirs))
+        ids = [int(dd.replace(model_dir_prefix,"")) if (model_dir_prefix) in dd and dd.replace(model_dir_prefix,"").isnumeric() else None for dd in model_dirs]
+        ids = list(filter(None, ids))
+        new_id = str(max(ids) + 1) if ids else "1"
+    else:
+        os.mkdir(experiments_dir)
+        new_id = "1"
+
     new_model_dir = os.path.join(experiments_dir, model_dir_prefix + new_id)
     os.mkdir(new_model_dir)
 
 
+    exit()
     # reset root logger
     [logging.root.removeHandler(handler) for handler in logging.root.handlers[:]]
     # info logger for saving command line outputs during training
