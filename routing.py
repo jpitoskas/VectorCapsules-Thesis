@@ -63,9 +63,7 @@ class WeightedAverageRouting(nn.Module):
 class DropoutWeightedAverageRouting(nn.Module):
     def __init__(self, p):
         super(DropoutWeightedAverageRouting, self).__init__()
-
         self.p = p
-        # self.b = nn.Parameter(torch.zeros((input_caps, output_caps)))
 
     def forward(self, u_predict):
 
@@ -74,65 +72,51 @@ class DropoutWeightedAverageRouting(nn.Module):
         be = torch.bernoulli(torch.full(u_predict.size()[:-1], 1-self.p).unsqueeze(-1)).to(u_predict)
         u_predict = torch.div(be*u_predict, 1-self.p)
 
-
         u_predict_norm = u_predict.norm(p=2, dim=3, keepdim=True)
         u_weighted = u_predict*u_predict_norm
         u_weighted_sum = u_weighted.sum(dim=1)
         u_weighted_average = u_weighted_sum / u_predict_norm.sum(dim=1)
-        # print("u_weighted", u_weighted.size())
-        # print("u_weighted_sum", u_weighted_sum.size())
-        # print("u_weighted_average", u_weighted_average.size())
-        # print("")
-        # print(out.size())
-        # exit()
-        # v = squash(s)
 
         v = squash(u_weighted_average)
 
-        # v = squash(v)
-
         return v
 
 
-class RansacRouting(nn.Module):
-    def __init__(self, n_hypothesis=10, p=0.3):
-        super(RansacRouting, self).__init__()
-        self.n_hypothesis = n_hypothesis
-        self.p = p
-        # self.b = nn.Parameter(torch.zeros((input_caps, output_caps)))
+class SubsetRouting(nn.Module):
+    def __init__(self, sub=0.8):
+        super(SubsetRouting, self).__init__()
+        self.sub = sub
 
     def forward(self, u_predict):
+
         batch_size, input_caps, output_caps, output_dim = u_predict.size()
-        M = math.floor(self.p * input_caps)
+        subset_size = math.ceil(self.sub*input_caps)
 
-        u_predict = u_predict.permute(0, 2, 1, 3)
-        print(u_predict.shape)
-        # bl = torch.randint(low=0, high=2, size=(5,5))
-        print(bl)
+        v = self.capsule_weighted_average(u_predict)
 
+        if self.sub > 0:
+            losses = torch.norm(v.unsqueeze(1) - u_predict, p=2, dim=3)
+            loss_threshold, _ = losses.kthvalue(k=subset_size, dim=1)
+            loss_threshold = loss_threshold.unsqueeze(1)
+            loss_threshold = loss_threshold.expand(losses.size())
+            condition = torch.le(losses, loss_threshold)
+            choose = torch.where(condition, torch.ones_like(losses), torch.zeros_like(losses))
+            choose = choose.unsqueeze(3)
+            u_predict = u_predict*choose
+        elif sel.sub == 0:
+            choose = torch.zeros(batch_size, input_caps, output_caps).unsqueeze(3).to(u_predict)
+            u_predict = u_predict*choose
+            u_predict += torch.finfo(torch.float64).eps
 
-        exit()
+        v = self.capsule_weighted_average(u_predict)
 
-        # for j in range(output_caps):
+        return v
 
+    def capsule_weighted_average(self, u_predict):
 
-
-        # s = (c.unsqueeze(2) * u_predict).sum(dim=1)
-        # print(u_predict.size())
         u_predict_norm = u_predict.norm(p=2, dim=3, keepdim=True)
         u_weighted = u_predict*u_predict_norm
         u_weighted_sum = u_weighted.sum(dim=1)
         u_weighted_average = u_weighted_sum / u_predict_norm.sum(dim=1)
-        # print("u", u_predict.size())
-        # print("u_norm", u_predict_norm.size())
-        # print("u_weighted", u_weighted.size())
-        # print("u_weighted_sum", u_weighted_sum.size())
-        # print("u_weighted_average", u_weighted_average.size())
-        # print("")
-        # print(out.size())
-        # exit()
-        # v = squash(s)
 
-        v = u_weighted_average
-
-        return v
+        return u_weighted_average

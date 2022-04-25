@@ -478,13 +478,14 @@ def cifar10(args, dataset_paths):
     '''
     transf = {
         'train': transforms.Compose([
+            transforms.ToPILImage(),
             transforms.RandomCrop((args.crop_dim, args.crop_dim), padding=args.padding),
             # transforms.ColorJitter(brightness=args.brightness, contrast=args.contrast),
+            transforms.RandomHorizontalFlip(p=0.5),
             transforms.ToTensor(),
             # Standardize()]),
             transforms.Normalize((0.4913997, 0.4821584, 0.4465309),
                                  (0.2470322, 0.2434851, 0.2615878)),
-            transforms.RandomHorizontalFlip(p=0.5)
             ]),
 
         'test': transforms.Compose([
@@ -522,10 +523,10 @@ def cifar10(args, dataset_paths):
     transf['train_'] = transforms.Compose([
                 transforms.ToPILImage(),
                 transforms.RandomCrop((args.crop_dim, args.crop_dim), padding=args.padding),
+                transforms.RandomHorizontalFlip(p=0.5),
                 transforms.ToTensor(),
                 transforms.Normalize((0.4913997, 0.4821584, 0.4465309),
                                      (0.2470322, 0.2434851, 0.2615878)),
-                transforms.RandomHorizontalFlip(p=0.5)
                 ])
 
 
@@ -533,10 +534,10 @@ def cifar10(args, dataset_paths):
     transf['valid'] = transforms.Compose([
                 transforms.ToPILImage(),
                 transforms.RandomCrop((args.crop_dim, args.crop_dim), padding=args.padding),
+                transforms.RandomHorizontalFlip(p=0.5),
                 transforms.ToTensor(),
                 transforms.Normalize((0.4913997, 0.4821584, 0.4465309),
                                      (0.2470322, 0.2434851, 0.2615878)),
-                transforms.RandomHorizontalFlip(p=0.5)
                 ])
 
     # transf['train_'] = transf['train']

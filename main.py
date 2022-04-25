@@ -26,7 +26,8 @@ import matplotlib.pyplot as plt
 
 from dataloaders import load_dataset
 from model import CapsNet, ReconstructionNet, CapsNetWithReconstruction, MarginLoss
-
+import warnings
+import csv
 
 warnings.filterwarnings("ignore")
 
@@ -42,6 +43,7 @@ if __name__ == '__main__':
     experiments_dir = os.path.join(os.getcwd(),'experiments')
     model_dir_prefix = "Model_"
 
+
     if os.path.exists(experiments_dir):
         model_dirs = [model_dir if os.path.isdir(os.path.join(experiments_dir, model_dir)) else None for model_dir in os.listdir(experiments_dir)]
         model_dirs = list(filter(None, model_dirs))
@@ -53,6 +55,7 @@ if __name__ == '__main__':
         new_id = "1"
 
     new_model_dir = os.path.join(experiments_dir, model_dir_prefix + new_id)
+    print(new_model_dir)
     os.mkdir(new_model_dir)
 
 
@@ -62,6 +65,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format='%(message)s',
          handlers=[logging.FileHandler(os.path.join(new_model_dir, f'trainlogs_{new_id}.log')),
             logging.StreamHandler()])
+
 
     # Training settings
     parser = argparse.ArgumentParser(description='Vector CapsNet')
@@ -73,16 +77,16 @@ if __name__ == '__main__':
     # parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
     #                     help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=50, metavar='N',
-                        help='number of epochs to train (default: 10)')
+                        help='number of epochs to train (default: 50)')
     parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
                         help='learning rate (default: 0.001)')
+    parser.add_argument('--scheduler', default=None, choices=['plateau', 'exponential'], help='scheduler (plateau, exponential)')
     parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='disables CUDA training')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
-    parser.add_argument('--log-interval', type=int, default=10, metavar='N',
-                        help='how many batches to wait before logging training status')
-    parser.add_argument('--routing_iterations', type=int, default=3)
+    # parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+    #                     help='how many batches to wait before logging training status')
     parser.add_argument('--with_reconstruction', action='store_true', default=True)
     # parser.add_argument('--n_epochs', type=int, default=300)
     # parser.add_argument('--weight_decay', type=float, default=1e-6)
@@ -98,10 +102,13 @@ if __name__ == '__main__':
     # parser.add_argument('--load_checkpoint_dir', default='../experiments')
     parser.add_argument('--test_affnist', dest='test_affNIST', action='store_true')
     # parser.add_argument('--routing', default='vb', help='routing algorithm (vb, naive)')
-    parser.add_argument('--routing_module', default='WeightedAverageRouting', choices=['AgreementRouting', 'WeightedAverageRouting', 'DropoutWeightedAverageRouting'],
-                        help='Routing algorithm (AgreementRouting, WeightedAverageRouting, DropoutWeightedAverageRouting)')
-    parser.add_argument('--dropout_probability', type=float, default=0.2)
+    parser.add_argument('--routing_module', default='WeightedAverageRouting', choices=['AgreementRouting', 'WeightedAverageRouting', 'DropoutWeightedAverageRouting', 'SubsetRouting'],
+                        help='Routing algorithm (AgreementRouting, WeightedAverageRouting, DropoutWeightedAverageRouting, SubsetRouting)')
+    parser.add_argument('--routing_iterations', type=int, default=3, help='if AgreementRouting is chosen')
+    parser.add_argument('--dropout_probability', type=float, default=0.2, help='if DropoutWeightedAverageRouting is chosen')
+    parser.add_argument('--subset_fraction', type=float, default=0.8, help='if SubsetRouting is chosen')
     args = parser.parse_args()
+
 
 
     device = torch.device('cuda:0' if not args.no_cuda and torch.cuda.is_available() else 'cpu')
@@ -144,7 +151,11 @@ if __name__ == '__main__':
     #     model.cuda()
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True, patience=15, min_lr=1e-6)
+
+    if args.scheduler == "plateau":
+        scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True, patience=15, min_lr=1e-6)
+    elif args.scheduler == "exponential":
+        scheduler = lr_scheduler.ExponentialLR(optimizer=optimizer, gamma=0.96)
 
 
     loss_fn = MarginLoss(0.9, 0.1, 0.5)
@@ -154,8 +165,17 @@ if __name__ == '__main__':
         model.train()
         train_loss = 0
         correct = 0
-        logging.info(f"Train Epoch:{epoch}:")
+        logging.info("\n===================================================================\n")
+        logging.info(f"Train Epoch:{epoch}:\n")
         for batch_idx, (data, target) in enumerate(tqdm(train_loader)):
+
+            # total_memory, used_memory, free_memory = map(int, os.popen('free -t -m').readlines()[-1].split()[1:])
+            # print("RAM memory % used:", round((used_memory/total_memory) * 100, 2))
+
+            # import psutil
+            # print('RAM memory % used:', psutil.virtual_memory()[2])
+
+            # exit()
             # if args.cuda:
             #     data, target = data.cuda(), target.cuda()
             data, target = data.to(device), target.to(device)
@@ -187,11 +207,11 @@ if __name__ == '__main__':
 
         train_loss /= len(train_loader.dataset)
         train_accuracy = 100. * correct / len(train_loader.dataset)
-        logging.info('\n\nTrain set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
+        logging.info('Train set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
             train_loss, correct, len(train_loader.dataset),
             train_accuracy))
 
-        return train_loss.item(), train_accuracy
+        return train_loss.item(), train_accuracy.item()
             # if batch_idx % args.log_interval == 0:
         # print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
         #     epoch, batch_idx * len(data), len(train_loader.dataset),
@@ -244,13 +264,15 @@ if __name__ == '__main__':
 
         test_loss /= len(loader.dataset)
         test_accuracy = 100. * correct / len(loader.dataset)
-        logging.info('{} set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)\n'.format(
+        logging.info('{} set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
             split, test_loss, correct, len(loader.dataset),
             test_accuracy))
-        return test_loss.item(), test_accuracy
+        return test_loss.item(), test_accuracy.item()
 
 
-    logging.info('\nTrain: {} - Validation: {} - Test: {}\n'.format(
+    logging.info('\n===================================================================\n')
+
+    logging.info('Train: {} - Validation: {} - Test: {}'.format(
         len(train_loader.dataset), len(valid_loader.dataset),
         len(test_loader.dataset)))
 
@@ -264,7 +286,8 @@ if __name__ == '__main__':
 
         train_loss, train_accuracy = train(epoch)
         valid_loss, valid_accuracy = test("Validation")
-        scheduler.step(valid_loss)
+        if args.scheduler:
+            scheduler.step(valid_loss)
         test_loss, test_accuracy = test("Test")
 
         train_losses.append(train_loss)
@@ -274,14 +297,27 @@ if __name__ == '__main__':
         test_losses.append(test_loss)
         test_accuracies.append(test_accuracy)
 
-    logging.info('\n')
-    logging.info(f'- Best Train Accuracy is {max(train_accuracies)} on Epoch {train_accuracies.index(max(train_accuracies))}.\n')
-    logging.info(f'- Best Validation Accuracy is {max(valid_accuracies)} on Epoch {valid_accuracies.index(max(valid_accuracies))+1}.\n')
-    logging.info(f'- Best Test Accuracy is {max(test_accuracies)} on Epoch {test_accuracies.index(max(test_accuracies))+1}.\n')
 
-    logging.info(f'- Best Train Loss is {min(train_losses)} on Epoch {train_losses.index(min(train_losses))+1}.\n')
-    logging.info(f'- Best Validation Loss is {min(valid_losses)} on Epoch {valid_losses.index(min(valid_losses))+1}.\n')
-    logging.info(f'- Best Test Loss is {min(test_losses)} on Epoch {test_losses.index(min(test_losses))+1}.\n')
+    logging.info('\n===================================================================\n')
+    logging.info(f'- Best Train Accuracy is {round(max(train_accuracies), 2)}% (i.e. {round(100.0-round(max(train_accuracies), 2), 2)}% Train Error) on Epoch {train_accuracies.index(max(train_accuracies))+1}.')
+    logging.info(f'- Best Validation Accuracy is {round(max(valid_accuracies), 2)}% (i.e. {round(100.0-round(max(valid_accuracies), 2), 2)}% Validation Error) on Epoch {valid_accuracies.index(max(valid_accuracies))+1}.')
+    logging.info(f'- Best Test Accuracy is {round(max(test_accuracies), 2)}% (i.e. {round(100.0-round(max(test_accuracies), 2), 2)}% Test Error) on Epoch {test_accuracies.index(max(test_accuracies))+1}.')
+
+    logging.info('\n===================================================================\n')
+    logging.info(f'- Best Train Loss is {round(min(train_losses), 4)} on Epoch {train_losses.index(min(train_losses))+1}.')
+    logging.info(f'- Best Validation Loss is {round(min(valid_losses), 4)} on Epoch {valid_losses.index(min(valid_losses))+1}.')
+    logging.info(f'- Best Test Loss is {round(min(test_losses), 4)} on Epoch {test_losses.index(min(test_losses))+1}.')
+
+    logging.info('\n===================================================================\n')
+
+
+    accuracies = [train_accuracies, valid_accuracies, test_accuracies]
+    losses = [train_losses, valid_losses, test_losses]
+    with open(os.path.join(new_model_dir, "accuracies.csv"), "w") as f1, open(os.path.join(new_model_dir, "losses.csv"), "w") as f2:
+        wr1 = csv.writer(f1)
+        wr2 = csv.writer(f2)
+        wr1.writerows(accuracies)
+        wr2.writerows(losses)
 
 
     plt.figure(figsize=(10,7))

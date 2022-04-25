@@ -6,7 +6,7 @@ from torch.autograd import Variable
 
 
 from capslayers import PrimaryCapsLayer, CapsLayer
-from routing import WeightedAverageRouting, RansacRouting, DropoutWeightedAverageRouting, AgreementRouting
+from routing import  AgreementRouting, WeightedAverageRouting, DropoutWeightedAverageRouting, SubsetRouting
 
 
 class CapsNet(nn.Module):
@@ -40,6 +40,8 @@ class CapsNet(nn.Module):
             self.routing_module = WeightedAverageRouting()
         elif args.routing_module == "DropoutWeightedAverageRouting":
             self.routing_module = DropoutWeightedAverageRouting(p=args.dropout_probability)
+        elif args.routing_module == "SubsetRouting":
+            self.routing_module = SubsetRouting(sub=args.subset_fraction)
 
         # self.routing_module = RansacRouting()
 
