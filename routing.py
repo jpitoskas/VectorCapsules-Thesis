@@ -30,6 +30,8 @@ class AgreementRouting(nn.Module):
         return v
 
 
+
+
 class WeightedAverageRouting(nn.Module):
     def __init__(self):
         super(WeightedAverageRouting, self).__init__()
@@ -60,6 +62,8 @@ class WeightedAverageRouting(nn.Module):
         return v
 
 
+
+
 class DropoutWeightedAverageRouting(nn.Module):
     def __init__(self, p):
         super(DropoutWeightedAverageRouting, self).__init__()
@@ -80,6 +84,8 @@ class DropoutWeightedAverageRouting(nn.Module):
         v = squash(u_weighted_average)
 
         return v
+
+
 
 
 class SubsetRouting(nn.Module):
@@ -111,6 +117,59 @@ class SubsetRouting(nn.Module):
         v = self.capsule_weighted_average(u_predict)
 
         return v
+
+    def capsule_weighted_average(self, u_predict):
+
+        u_predict_norm = u_predict.norm(p=2, dim=3, keepdim=True)
+        u_weighted = u_predict*u_predict_norm
+        u_weighted_sum = u_weighted.sum(dim=1)
+        u_weighted_average = u_weighted_sum / u_predict_norm.sum(dim=1)
+
+        return u_weighted_average
+
+
+
+
+class RansacRouting(nn.Module):
+    def __init__(self, H=10, sub=0.8):
+        super(RansacRouting, self).__init__()
+        self.H = H
+        self.sub = sub
+
+    def forward(self, u_predict):
+
+        r = self.optimal_hypotheses_matrix(u_predict)
+        u_predict = u_predict*r
+        v = self.capsule_weighted_average(u_predict)
+
+        return v
+
+    def optimal_hypotheses_matrix(self, V):
+
+        batch_size, input_caps, output_caps, output_dim = V.size()
+        subset_size = math.ceil(self.sub*input_caps)
+
+        sample = torch.rand(batch_size, input_caps, output_caps, self.H).topk(subset_size, dim=1).indices.to(V)
+        mask = torch.zeros(batch_size, input_caps, output_caps, self.H).to(V)
+        r = mask.scatter_(dim=1, index=sample.type(torch.int64), value=1).to(V)
+
+        V_exp = V.unsqueeze(-1).expand(batch_size, input_caps, output_caps, output_dim, self.H)
+        Vr = V_exp*r.unsqueeze(3)
+
+        Vr_norm = Vr.norm(p=2, dim=3, keepdim=True)
+
+        Mu = torch.sum(Vr_norm*Vr, dim=1) / Vr_norm.sum(dim=1)
+
+        losses = torch.norm(V_exp - Mu.unsqueeze(1) , p=2, dim=3).sum(dim=1)
+        min_losses, min_losses_idxs = losses.min(dim=2)
+
+        r = r.permute(0,2,3,1).reshape(-1, self.H, input_caps)
+        min_losses_idxs = min_losses_idxs.reshape(-1,1)
+        ar = torch.arange(r.shape[0]).unsqueeze(-1)
+
+        final_r = r[ar, min_losses_idxs].reshape(batch_size, output_caps, 1, input_caps).permute(0,3,1,2)
+
+        return final_r
 
     def capsule_weighted_average(self, u_predict):
 

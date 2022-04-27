@@ -102,11 +102,12 @@ if __name__ == '__main__':
     # parser.add_argument('--load_checkpoint_dir', default='../experiments')
     parser.add_argument('--test_affnist', dest='test_affNIST', action='store_true')
     # parser.add_argument('--routing', default='vb', help='routing algorithm (vb, naive)')
-    parser.add_argument('--routing_module', default='WeightedAverageRouting', choices=['AgreementRouting', 'WeightedAverageRouting', 'DropoutWeightedAverageRouting', 'SubsetRouting'],
-                        help='Routing algorithm (AgreementRouting, WeightedAverageRouting, DropoutWeightedAverageRouting, SubsetRouting)')
+    parser.add_argument('--routing_module', default='WeightedAverageRouting', choices=['AgreementRouting', 'WeightedAverageRouting', 'DropoutWeightedAverageRouting', 'SubsetRouting', 'RansacRouting'],
+                        help='Routing algorithm (AgreementRouting, WeightedAverageRouting, DropoutWeightedAverageRouting, SubsetRouting, RansacRouting)')
     parser.add_argument('--routing_iterations', type=int, default=3, help='if AgreementRouting is chosen')
     parser.add_argument('--dropout_probability', type=float, default=0.2, help='if DropoutWeightedAverageRouting is chosen')
-    parser.add_argument('--subset_fraction', type=float, default=0.8, help='if SubsetRouting is chosen')
+    parser.add_argument('--n_hypothesis', type=int, default=10, help='if RansacRouting is chosen')
+    parser.add_argument('--subset_fraction', type=float, default=0.8, help='if SubsetRouting or RansacRouting is chosen')
     args = parser.parse_args()
 
 
