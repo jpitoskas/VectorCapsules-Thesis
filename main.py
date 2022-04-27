@@ -106,7 +106,7 @@ if __name__ == '__main__':
                         help='Routing algorithm (AgreementRouting, WeightedAverageRouting, DropoutWeightedAverageRouting, SubsetRouting, RansacRouting)')
     parser.add_argument('--routing_iterations', type=int, default=3, help='if AgreementRouting is chosen')
     parser.add_argument('--dropout_probability', type=float, default=0.2, help='if DropoutWeightedAverageRouting is chosen')
-    parser.add_argument('--n_hypothesis', type=int, default=10, help='if RansacRouting is chosen')
+    parser.add_argument('--n_hypotheses', type=int, default=10, help='if RansacRouting is chosen')
     parser.add_argument('--subset_fraction', type=float, default=0.8, help='if SubsetRouting or RansacRouting is chosen')
     args = parser.parse_args()
 

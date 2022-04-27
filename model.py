@@ -43,7 +43,7 @@ class CapsNet(nn.Module):
         elif args.routing_module == "SubsetRouting":
             self.routing_module = SubsetRouting(sub=args.subset_fraction)
         elif args.routing_module == "RansacRouting":
-            self.routing_module = RansacRouting(H=args.n_hypothesis, sub=args.subset_fraction)
+            self.routing_module = RansacRouting(H=args.n_hypotheses, sub=args.subset_fraction)
 
         # self.routing_module = RansacRouting()
 
