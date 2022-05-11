@@ -57,7 +57,7 @@ class WeightedAverageRouting(nn.Module):
         # exit()
         # v = squash(s)
 
-        v = u_weighted_average
+        v = squash(u_weighted_average)
 
         return v
 
@@ -114,7 +114,7 @@ class SubsetRouting(nn.Module):
             u_predict = u_predict*choose
             u_predict += torch.finfo(torch.float64).eps
 
-        v = self.capsule_weighted_average(u_predict)
+        v = squash(self.capsule_weighted_average(u_predict))
 
         return v
 
@@ -140,7 +140,7 @@ class RansacRouting(nn.Module):
 
         r = self.optimal_hypotheses_matrix(u_predict)
         u_predict = u_predict*r
-        v = self.capsule_weighted_average(u_predict)
+        v = squash(self.capsule_weighted_average(u_predict))
 
         return v
 

@@ -25,7 +25,7 @@ import os
 import matplotlib.pyplot as plt
 
 from dataloaders import load_dataset
-from model import CapsNet, ReconstructionNet, CapsNetWithReconstruction, MarginLoss
+from model import CapsNet, ReconstructionNet, CapsNetWithReconstruction, MarginLoss, ReconstructionLoss, MixedLoss
 import warnings
 import csv
 
@@ -99,6 +99,7 @@ if __name__ == '__main__':
     # parser.add_argument('--arch', nargs='+', type=int, default=[64,16,16,16,5]) # architecture n caps
     parser.add_argument('--num_workers', type=int, default=1)
     parser.add_argument('--extra_conv', action='store_true', default=False)
+    parser.add_argument('--extra_caps', action='store_true', default=False)
     # parser.add_argument('--load_checkpoint_dir', default='../experiments')
     parser.add_argument('--test_affnist', dest='test_affNIST', action='store_true')
     # parser.add_argument('--routing', default='vb', help='routing algorithm (vb, naive)')
@@ -108,6 +109,7 @@ if __name__ == '__main__':
     parser.add_argument('--dropout_probability', type=float, default=0.2, help='if DropoutWeightedAverageRouting is chosen')
     parser.add_argument('--n_hypotheses', type=int, default=10, help='if RansacRouting is chosen')
     parser.add_argument('--subset_fraction', type=float, default=0.8, help='if SubsetRouting or RansacRouting is chosen')
+    parser.add_argument('--load_model_id', type=int, default=None)
     args = parser.parse_args()
 
 
@@ -134,19 +136,23 @@ if __name__ == '__main__':
     model = CapsNet(args)
 
 
-    if torch.cuda.device_count() > 1:
-        logging.info('\nUsing', torch.cuda.device_count(), 'GPU(s).\n')
-        model = nn.DataParallel(model)
-
-    model.to(device)
 
 
+    margin_loss = MarginLoss(0.9, 0.1, 0.5)
     if args.with_reconstruction:
         reconstruction_model = ReconstructionNet(args, model.digitCaps.output_dim)
         reconstruction_alpha = 0.0005
         model = CapsNetWithReconstruction(model, reconstruction_model)
+        reconstruction_loss = ReconstructionLoss(reconstruction_alpha)
+        loss_fn = MixedLoss(margin_loss, reconstruction_loss)
+    else:
+        loss_fn = margin_loss
+
+    init_epoch = 1
+
 
     model.to(device)
+
 
     # if args.cuda:
     #     model.cuda()
@@ -159,7 +165,31 @@ if __name__ == '__main__':
         scheduler = lr_scheduler.ExponentialLR(optimizer=optimizer, gamma=0.96)
 
 
-    loss_fn = MarginLoss(0.9, 0.1, 0.5)
+
+
+
+    if args.load_model_id:
+        load_path = pth = os.path.join(experiments_dir, model_dir_prefix + str(args.load_model_id), f"checkpoint_{args.load_model_id}.pt")
+        logging.info(f'\nLoading Model_{args.load_model_id} from "{load_path}"\n')
+        checkpoint = torch.load(load_path)
+        # Loading model, optimizer, epoch, loss
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        init_epoch = checkpoint['epoch']
+        loss_fn = checkpoint['loss']
+
+    if init_epoch > args.epochs:
+        raise ValueError(f"loaded {init_epoch} epochs of training while complete training requires only {args.epochs}")
+
+
+
+    if torch.cuda.device_count() > 1:
+        logging.info('\nUsing', torch.cuda.device_count(), 'GPU(s).\n')
+        model = nn.DataParallel(model)
+
+    model.to(device)
+
+
 
 
     def train(epoch):
@@ -170,32 +200,18 @@ if __name__ == '__main__':
         logging.info(f"Train Epoch:{epoch}:\n")
         for batch_idx, (data, target) in enumerate(tqdm(train_loader)):
 
-            # total_memory, used_memory, free_memory = map(int, os.popen('free -t -m').readlines()[-1].split()[1:])
-            # print("RAM memory % used:", round((used_memory/total_memory) * 100, 2))
-
-            # import psutil
-            # print('RAM memory % used:', psutil.virtual_memory()[2])
-
-            # exit()
-            # if args.cuda:
-            #     data, target = data.cuda(), target.cuda()
             data, target = data.to(device), target.to(device)
             data, target = Variable(data), Variable(target, requires_grad=False)
             optimizer.zero_grad()
             if args.with_reconstruction:
                 output, probs = model(data, target)
-                # reconstruction_loss = F.mse_loss(output, data.view(-1, output.size(1))).item()
-                reconstruction_loss = F.mse_loss(output, data.view(-1, output.size(1)))
-                # print(output.shape, data.view(-1, output.size(1)).shape)
-                # dif = output - data.view(-1, output.size(1))
-                # dif = torch.square(dif)
-                # print(torch.mean(dif, dim=1).mean())
-                # print(reconstruction_loss)
-                # exit()
-                margin_loss = loss_fn(probs, target)
-                loss = reconstruction_alpha * reconstruction_loss + margin_loss
+
+                # reconstruction_loss = F.mse_loss(output, data.view(-1, output.size(1)))
+                # margin_loss = loss_fn(probs, target)
+                # loss = reconstruction_alpha * reconstruction_loss + margin_loss
+
+                loss = loss_fn(probs, target, output, data, size_average=True)
                 train_loss += loss * data.size(0)
-                # print(loss)
             else:
                 output, probs = model(data)
                 loss = loss_fn(probs, target)
@@ -235,28 +251,17 @@ if __name__ == '__main__':
 
                 if args.with_reconstruction:
                     output, probs = model(data, target)
-                    # reconstruction_loss = F.mse_loss(output, data.view(-1, output.size(1)), size_average=True).item()
-                    # margin_loss = loss_fn(probs, target, size_average=True).item()
-                    reconstruction_loss = F.mse_loss(output, data.view(-1, output.size(1)), size_average=True)
-                    margin_loss = loss_fn(probs, target, size_average=True)
-                    loss = reconstruction_alpha * reconstruction_loss + margin_loss
+
+                    # reconstruction_loss = F.mse_loss(output, data.view(-1, output.size(1)), size_average=True)
+                    # margin_loss = loss_fn(probs, target, size_average=True)
+                    # loss = reconstruction_alpha * reconstruction_loss + margin_loss
+
+                    loss = loss_fn(probs, target, output, data, size_average=True)
                     test_loss += loss * data.size(0)
-                    # print(loss)
-                    # print(len(loader))
-                    # print(data.shape)
-                    # print(output.shape, data.view(-1, output.size(1)).shape)
-                    # dif = output - data.view(-1, output.size(1))
-                    # dif = torch.square(dif)
-                    # print('\n', torch.mean(dif, dim=1).mean())
-                    # print('\n', reconstruction_loss)
-                    # print('\n', margin_loss)
-                    # print()
-                    # exit()
 
                 else:
                     output, probs = model(data)
                     margin_loss += loss_fn(probs, target, size_average=False)
-                    # margin_loss += loss_fn(probs, target, size_average=False).item()
                     loss = margin_loss
                     test_loss += loss * data.size(0)
 
@@ -283,7 +288,8 @@ if __name__ == '__main__':
     valid_accuracies = []
     test_losses = []
     test_accuracies = []
-    for epoch in range(1, args.epochs + 1):
+
+    for epoch in range(init_epoch, args.epochs + 1):
 
         train_loss, train_accuracy = train(epoch)
         valid_loss, valid_accuracy = test("Validation")
@@ -297,6 +303,13 @@ if __name__ == '__main__':
         valid_accuracies.append(valid_accuracy)
         test_losses.append(test_loss)
         test_accuracies.append(test_accuracy)
+
+        torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss_fn,
+                }, os.path.join(new_model_dir, f"checkpoint_{new_id}.pt"))
 
 
     logging.info('\n===================================================================\n')
@@ -345,6 +358,8 @@ if __name__ == '__main__':
 
     # reset root logger
     [logging.root.removeHandler(handler) for handler in logging.root.handlers[:]]
+
+
 
         # torch.save(model.state_dict(),
         #            '{:03d}_model_dict_{}routing_reconstruction{}.pth'.format(epoch, args.routing_iterations,

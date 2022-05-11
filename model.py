@@ -18,6 +18,7 @@ class CapsNet(nn.Module):
         self.H = args.Hin
         self.W = args.Win
         self.extra_conv = args.extra_conv
+        self.extra_caps = args.extra_caps
 
         # self.conv1 = nn.Conv2d(in_channels=args.channels, out_channels=256, kernel_size=9, stride=1)
         self.conv1 = nn.Conv2d(in_channels=args.channels, out_channels=256, kernel_size=9, stride=1)
@@ -26,6 +27,8 @@ class CapsNet(nn.Module):
         if args.extra_conv:
             self.conv2 = nn.Conv2d(in_channels=256, out_channels=128, kernel_size=5, stride=1)
             self.update_output_shape(self.conv2)
+
+
 
 
         # exit()
@@ -58,8 +61,13 @@ class CapsNet(nn.Module):
         print(self.num_capsules, self.H)
         # exit()
 
+        if args.extra_caps:
+            self.caps = CapsLayer(input_caps=self.num_capsules, input_dim=self.caps_dim, output_caps=32,
+                                        output_dim=16, routing_module=self.routing_module)
+            self.update_output_shape(self.caps)
+
         self.digitCaps = CapsLayer(input_caps=self.num_capsules, input_dim=self.caps_dim, output_caps=args.n_classes,
-                                   output_dim=16, routing_module=self.routing_module)
+                                    output_dim=16, routing_module=self.routing_module)
         self.update_output_shape(self.digitCaps)
 
     def update_output_shape(self, layer):
@@ -91,9 +99,14 @@ class CapsNet(nn.Module):
 
         # x = self.convCaps(x)
 
-        x = self.digitCaps(x)
+
         # print(x.shape)
-        # exit()
+        if self.extra_caps:
+            x = self.caps(x)
+        # print(x.shape)
+
+        x = self.digitCaps(x)
+
         probs = x.pow(2).sum(dim=2).sqrt()
         return x, probs
 
@@ -149,6 +162,28 @@ class MarginLoss(nn.Module):
         losses = targets.float() * F.relu(self.m_pos - lengths).pow(2) + \
                  self.lambda_ * (1. - targets.float()) * F.relu(lengths - self.m_neg).pow(2)
         return losses.mean() if size_average else losses.sum()
+
+class ReconstructionLoss(nn.Module):
+    def __init__(self, reconstruction_alpha):
+        super(ReconstructionLoss, self).__init__()
+        self.reconstruction_alpha = reconstruction_alpha
+
+
+    def forward(self, output, data):
+        reconstruction_loss = F.mse_loss(output, data.view(-1, output.size(1)))
+        reconstruction_loss = self.reconstruction_alpha * reconstruction_loss
+        return reconstruction_loss
+
+class MixedLoss(nn.Module):
+    def __init__(self, margin_loss, reconstruction_loss):
+        super(MixedLoss, self).__init__()
+        self.margin_loss = margin_loss
+        self.reconstruction_loss = reconstruction_loss
+
+    def forward(self, lengths, targets, output, data, size_average=True):
+        loss = self.margin_loss(lengths, targets, size_average) + self.reconstruction_loss(output, data)
+        return loss
+
 
 
 # class VectorCaps(nn.Module):
