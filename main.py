@@ -25,7 +25,7 @@ import os
 import matplotlib.pyplot as plt
 
 from dataloaders import load_dataset
-from model import CapsNet, ReconstructionNet, CapsNetWithReconstruction, MarginLoss, ReconstructionLoss, MixedLoss
+from model import CapsNet, ConvCapsNet, ReconstructionNet, CapsNetWithReconstruction, MarginLoss, ReconstructionLoss, MixedLoss
 import warnings
 import csv
 
@@ -87,7 +87,7 @@ if __name__ == '__main__':
                         help='random seed (default: 1)')
     # parser.add_argument('--log-interval', type=int, default=10, metavar='N',
     #                     help='how many batches to wait before logging training status')
-    parser.add_argument('--with_reconstruction', action='store_true', default=True)
+    parser.add_argument('--with_reconstruction', type=eval, default=True, choices=[True, False])
     # parser.add_argument('--n_epochs', type=int, default=300)
     # parser.add_argument('--weight_decay', type=float, default=1e-6)
     # parser.add_argument('--routing_iter', type=int, default=3)
@@ -99,7 +99,10 @@ if __name__ == '__main__':
     # parser.add_argument('--arch', nargs='+', type=int, default=[64,16,16,16,5]) # architecture n caps
     parser.add_argument('--num_workers', type=int, default=1)
     parser.add_argument('--extra_conv', action='store_true', default=False)
-    parser.add_argument('--extra_caps', action='store_true', default=False)
+    parser.add_argument('--extra_caps', default=False, choices=[False, 'caps', 'convCaps'])
+    parser.add_argument('--extra_caps_layer', type=int, default=0, choices=[0,1,2])
+    parser.add_argument('--extra_convCaps_layer', type=int, default=0, choices=[0,1,2])
+    # parser.add_argument('--extra_caps_dim', default=False, choices=[False, 'caps', 'convCaps'])
     # parser.add_argument('--load_checkpoint_dir', default='../experiments')
     parser.add_argument('--test_affnist', dest='test_affNIST', action='store_true')
     # parser.add_argument('--routing', default='vb', help='routing algorithm (vb, naive)')
@@ -108,9 +111,14 @@ if __name__ == '__main__':
     parser.add_argument('--routing_iterations', type=int, default=3, help='if AgreementRouting is chosen')
     parser.add_argument('--dropout_probability', type=float, default=0.2, help='if DropoutWeightedAverageRouting is chosen')
     parser.add_argument('--n_hypotheses', type=int, default=10, help='if RansacRouting is chosen')
-    parser.add_argument('--subset_fraction', type=float, default=0.8, help='if SubsetRouting or RansacRouting is chosen')
+    parser.add_argument('--subset_fraction', type=float, default=0.7, help='if SubsetRouting or RansacRouting is chosen')
+    parser.add_argument('--metric', default='mse', choices=['mse', 'cosine'], help='if SubsetRouting or RansacRouting is chosen')
     parser.add_argument('--load_model_id', type=int, default=None)
+    parser.add_argument('--architecture', default='CapsNet', choices=['CapsNet', 'ConvCapsNet'])
+
+
     args = parser.parse_args()
+
 
 
 
@@ -133,7 +141,10 @@ if __name__ == '__main__':
     logging.info('\n'.join(f'{k}: {v}' for k, v in vars(args).items()))
 
 
-    model = CapsNet(args)
+    if args.architecture == "CapsNet":
+        model = CapsNet(args)
+    elif args.architecture == "ConvCapsNet":
+        model = ConvCapsNet(args)
 
 
 
@@ -189,6 +200,10 @@ if __name__ == '__main__':
 
     model.to(device)
 
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    params = sum(p.numel() for p in model.parameters())
+
+    logging.info('\nModel Parameters {:,}\n'.format(params))
 
 
 
@@ -214,8 +229,9 @@ if __name__ == '__main__':
                 train_loss += loss * data.size(0)
             else:
                 output, probs = model(data)
-                loss = loss_fn(probs, target)
+                loss = loss_fn(probs, target, size_average=True)
                 train_loss += loss * data.size(0)
+
             pred = probs.data.max(1, keepdim=True)[1]  # get the index of the max probability
             correct += pred.eq(target.data.view_as(pred)).cpu().sum()
 
@@ -261,8 +277,10 @@ if __name__ == '__main__':
 
                 else:
                     output, probs = model(data)
-                    margin_loss += loss_fn(probs, target, size_average=False)
-                    loss = margin_loss
+                    # margin_loss += loss_fn(probs, target, size_average=False)
+                    # loss = margin_loss
+                    # test_loss += loss * data.size(0)
+                    loss = loss_fn(probs, target, size_average=True)
                     test_loss += loss * data.size(0)
 
                 pred = probs.data.max(1, keepdim=True)[1]  # get the index of the max probability
